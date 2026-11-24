@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Home Inventory"
 include(":app")
+include(":shared")
