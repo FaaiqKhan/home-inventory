@@ -52,6 +52,9 @@ class FakePlatform(
     var lastTorch: Boolean? = null
     var nextPhoto: String? = "/photos/p1.jpg"
     var photoCaptures = 0
+    /** Path the fake file picker returns; null means the user cancelled. */
+    var nextBackupPick: String? = null
+    var backupPicks = 0
 
     var permissionState by mutableStateOf(permission)
 
@@ -84,6 +87,12 @@ class FakePlatform(
     override fun rememberPhotoCapture(onResult: (String?) -> Unit): () -> Unit = {
         photoCaptures++
         onResult(nextPhoto)
+    }
+
+    @Composable
+    override fun rememberBackupPicker(onResult: (String?) -> Unit): () -> Unit = {
+        backupPicks++
+        onResult(nextBackupPick)
     }
 }
 

@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import com.localentertainmentgames.homeinventory.AppController
 import com.localentertainmentgames.homeinventory.model.AppSettings
 import com.localentertainmentgames.homeinventory.model.DashboardLayout
+import com.localentertainmentgames.homeinventory.model.Format
+import com.localentertainmentgames.homeinventory.platform.LocalAppPlatform
 import com.localentertainmentgames.homeinventory.ui.components.ConfirmDialog
 import com.localentertainmentgames.homeinventory.ui.components.Overline
 import com.localentertainmentgames.homeinventory.ui.components.SecondaryButton
@@ -44,6 +46,7 @@ import com.localentertainmentgames.homeinventory.ui.theme.Radius
 fun SettingsSheet(c: AppController, settings: AppSettings, onDismiss: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var confirmErase by remember { mutableStateOf(false) }
+    val pickBackup = LocalAppPlatform.current.rememberBackupPicker { c.onBackupPicked(it) }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -100,6 +103,7 @@ fun SettingsSheet(c: AppController, settings: AppSettings, onDismiss: () -> Unit
             HorizontalDivider(color = AppTheme.colors.border)
             Overline("Data", modifier = Modifier.padding(top = 8.dp))
             SecondaryButton("Export Backup", onClick = { c.exportBackup() }, modifier = Modifier.fillMaxWidth())
+            SecondaryButton("Restore from Backup", onClick = pickBackup, modifier = Modifier.fillMaxWidth())
             SecondaryButton(
                 "Load Sample Inventory",
                 onClick = {
@@ -127,6 +131,22 @@ fun SettingsSheet(c: AppController, settings: AppSettings, onDismiss: () -> Unit
                 onDismiss()
             },
             onDismiss = { confirmErase = false },
+        )
+    }
+    c.pendingRestore?.let { backup ->
+        val made = backup.exportedAtMillis.takeIf { it > 0 }?.let { " made ${Format.date(it, c.timeZone)}" }.orEmpty()
+        val photos = if (backup.photoCount > 0) " and ${backup.photoCount} ${if (backup.photoCount == 1) "photo" else "photos"}" else ""
+        ConfirmDialog(
+            title = "Restore this backup?",
+            message = "The backup$made has ${backup.itemCount} ${if (backup.itemCount == 1) "item" else "items"}$photos. " +
+                "It replaces everything on this phone: items, the go-bag checklist and your evacuation plan.",
+            confirmLabel = "Restore",
+            destructive = true,
+            onConfirm = {
+                c.confirmRestore()
+                onDismiss()
+            },
+            onDismiss = { c.cancelRestore() },
         )
     }
 }

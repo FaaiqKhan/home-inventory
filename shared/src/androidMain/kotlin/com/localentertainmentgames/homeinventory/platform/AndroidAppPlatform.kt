@@ -196,6 +196,38 @@ class AndroidAppPlatform(private val activity: ComponentActivity) : AppPlatform 
         }
     }
 
+    @Composable
+    override fun rememberBackupPicker(onResult: (String?) -> Unit): () -> Unit {
+        val scope = rememberCoroutineScope()
+        val callback by rememberUpdatedState(onResult)
+        val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri == null) {
+                callback(null)
+                return@rememberLauncherForActivityResult
+            }
+            scope.launch {
+                val copy = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val file = File(exportDir, "restore-${UUID.randomUUID()}.json")
+                        activity.contentResolver.openInputStream(uri)?.use { input -> file.outputStream().use { input.copyTo(it) } }
+                            ?: error("unreadable")
+                        file.absolutePath
+                    }.getOrNull()
+                }
+                if (copy == null) Toast.makeText(activity, "Couldn't open that file", Toast.LENGTH_SHORT).show()
+                callback(copy)
+            }
+        }
+        return {
+            try {
+                // Many file providers label .json as octet-stream or text, so accept those too.
+                launcher.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
+            } catch (_: ActivityNotFoundException) {
+                Toast.makeText(activity, "No file picker on this device", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     companion object {
         const val PHOTO_MAX_PX = 1600
 

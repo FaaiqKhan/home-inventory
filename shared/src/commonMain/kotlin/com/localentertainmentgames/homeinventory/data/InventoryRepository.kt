@@ -134,6 +134,14 @@ class InventoryRepository(
 
     fun replaceAll(newData: InventoryData) = update { newData }
 
+    /** Replaces everything with restored [newData] and deletes photo files nothing points to any more. */
+    fun restore(newData: InventoryData) {
+        val before = _data.value.items.flatMapTo(HashSet()) { it.photos }
+        val after = newData.items.flatMapTo(HashSet()) { it.photos }
+        update { newData }
+        (before - after).forEach(deleteFile)
+    }
+
     fun loadSample() = update { SampleData.build(now(), clock).copy(settings = it.settings) }
 
     fun eraseAll() = update { InventoryData(settings = it.settings) }

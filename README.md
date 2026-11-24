@@ -30,6 +30,10 @@ iosApp/   Xcode project (SwiftUI host for the Compose UI)
   `FontVariation.weight`.
 - **Data**: `InventoryRepository` keeps a single JSON document in app-private storage. Writes are atomic and
   happen in the background. Cloud backup is off on Android, so the data stays on the phone.
+- **Backup and restore** (`data/Backup.kt`): Export Backup writes one JSON file that includes the
+  photos as base64. Settings → Restore from Backup opens the system file picker, checks the file,
+  asks for confirmation, then replaces everything and writes the photos back. Restore also reads
+  backups from the earlier format, which had no photos.
 - **Platform code** (`AppPlatform`):
 
   | Capability | Android | iOS |

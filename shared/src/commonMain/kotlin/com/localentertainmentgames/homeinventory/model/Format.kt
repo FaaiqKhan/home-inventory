@@ -56,6 +56,9 @@ object Format {
     /** "Mar 2024" */
     fun monthYear(d: LocalDate): String = "${shortMonth(d.month.ordinal + 1)} ${d.year}"
 
+    /** "Nov 24, 2026" for an instant. */
+    fun date(millis: Long, tz: TimeZone): String = date(Instant.fromEpochMilliseconds(millis).toLocalDateTime(tz).date)
+
     /** "14:02:11" */
     fun time(millis: Long, tz: TimeZone = TimeZone.currentSystemDefault()): String {
         val t: LocalDateTime = Instant.fromEpochMilliseconds(millis).toLocalDateTime(tz)

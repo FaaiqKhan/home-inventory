@@ -52,6 +52,12 @@ interface AppPlatform {
     @Composable
     fun rememberPhotoCapture(onResult: (String?) -> Unit): () -> Unit
 
+    /**
+     * Returns a launcher for the system file picker (JSON files). [onResult] gets the path of a
+     * local copy of the chosen file, which the caller may delete, or null if cancelled.
+     */
+    @Composable
+    fun rememberBackupPicker(onResult: (String?) -> Unit): () -> Unit
 }
 
 val LocalAppPlatform = staticCompositionLocalOf<AppPlatform> { error("No AppPlatform provided") }

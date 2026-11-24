@@ -68,7 +68,9 @@ import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIApplication
 import platform.UIKit.UIApplicationDidBecomeActiveNotification
 import platform.UIKit.UIApplicationOpenSettingsURLString
+import platform.UIKit.UIDocumentPickerDelegateProtocol
 import platform.UIKit.UIDocumentPickerViewController
+import platform.UniformTypeIdentifiers.UTTypeJSON
 import platform.UIKit.UIGraphicsImageRenderer
 import platform.UIKit.UIImage
 import platform.UIKit.UIImageJPEGRepresentation
@@ -180,6 +182,33 @@ class IosAppPlatform : AppPlatform {
         }
     }
 
+    @Composable
+    override fun rememberBackupPicker(onResult: (String?) -> Unit): () -> Unit {
+        val callback by rememberUpdatedState(onResult)
+        val delegate = remember { BackupPickerDelegate { callback(it) } }
+        return {
+            val top = topViewController()
+            if (top == null) {
+                callback(null)
+            } else {
+                // asCopy puts a private copy in the app's tmp folder, so no security-scoped access is needed.
+                val picker = UIDocumentPickerViewController(forOpeningContentTypes = listOf(UTTypeJSON), asCopy = true)
+                picker.delegate = delegate
+                picker.allowsMultipleSelection = false
+                top.presentViewController(picker, animated = true, completion = null)
+            }
+        }
+    }
+}
+
+private class BackupPickerDelegate(private val onResult: (String?) -> Unit) : NSObject(), UIDocumentPickerDelegateProtocol {
+    override fun documentPicker(controller: UIDocumentPickerViewController, didPickDocumentsAtURLs: List<*>) {
+        onResult((didPickDocumentsAtURLs.firstOrNull() as? NSURL)?.path)
+    }
+
+    override fun documentPickerWasCancelled(controller: UIDocumentPickerViewController) {
+        onResult(null)
+    }
 }
 
 /** One repository per process. */

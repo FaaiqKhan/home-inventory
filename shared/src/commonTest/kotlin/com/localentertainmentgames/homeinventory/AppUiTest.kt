@@ -4,6 +4,7 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasTestTag
@@ -17,15 +18,18 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
-import com.localentertainmentgames.homeinventory.data.BackupCodec
+import com.localentertainmentgames.homeinventory.data.Backup
 import com.localentertainmentgames.homeinventory.data.Files
 import com.localentertainmentgames.homeinventory.data.InventoryRepository
 import com.localentertainmentgames.homeinventory.model.Format
 import com.localentertainmentgames.homeinventory.model.InventoryData
+import com.localentertainmentgames.homeinventory.model.Item
 import com.localentertainmentgames.homeinventory.model.ItemTag
 import com.localentertainmentgames.homeinventory.platform.CameraPermission
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -133,10 +137,98 @@ class AppUiTest {
         waitUntil(timeoutMillis = 5_000) { h.platform.saved.isNotEmpty() }
         val path = h.platform.saved.single()
         assertTrue(path.endsWith(".json"))
-        val decoded = BackupCodec.decode(assertNotNull(Files.readText(path)))
-        assertEquals(h.repo.data.value.items, decoded.items)
+        val decoded = Backup.parse(assertNotNull(Files.readText(path)))
+        assertEquals(h.repo.data.value.items, decoded.data.items)
         waitForIdle()
         onNodeWithTag("last-backup").assertTextEquals("Last backup today")
+    }
+
+    @Test
+    fun exportBackupIncludesPhotos() {
+        val platform = FakePlatform()
+        val photo = "${platform.dataDir}/photos/cam.jpg"
+        Files.writeBytes(photo, byteArrayOf(1, 2, 3))
+        val data = InventoryData(items = listOf(Item(id = "a", name = "Camera", photos = listOf(photo))))
+        uiTest(data = data, platform = platform) { h ->
+            onNodeWithText("Export Backup").performClick()
+            waitUntil(timeoutMillis = 5_000) { h.platform.saved.isNotEmpty() }
+            val backup = Backup.parse(assertNotNull(Files.readText(h.platform.saved.single())))
+            assertEquals(setOf(photo), backup.photos.keys)
+        }
+    }
+
+    private fun writeBackupFile(platform: FakePlatform, text: String): String {
+        val path = "${platform.exportDir}/picked-${platform.backupPicks}.json"
+        Files.writeText(path, text)
+        platform.nextBackupPick = path
+        return path
+    }
+
+    private fun ComposeUiTest.tapRestore() {
+        onNodeWithContentDescription("Settings").performClick()
+        onNodeWithText("Restore from Backup").performScrollTo().performClick()
+        waitForIdle()
+    }
+
+    @Test
+    fun restoreFromBackupReplacesEverythingAfterConfirming() {
+        val platform = FakePlatform()
+        val source = sampleData()
+        val photoItem = source.items.first()
+        val backupData = source.copy(items = listOf(photoItem.copy(photos = listOf("/elsewhere/p.jpg"))) + source.items.drop(1))
+        val picked = writeBackupFile(platform, Backup.create(backupData, FIXED_NOW.toEpochMilliseconds()) { byteArrayOf(7, 7, 7) })
+        uiTest(data = InventoryData(items = listOf(Item(id = "old", name = "Old Thing"))), platform = platform) { h ->
+            tapRestore()
+            assertEquals(1, h.platform.backupPicks)
+            waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Restore this backup?").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithText("The backup made Nov 24, 2026 has 13 items and 1 photo", substring = true).assertExists()
+            onNodeWithText("Restore").performClick()
+            waitUntil(timeoutMillis = 5_000) { h.repo.data.value.items.size == 13 }
+            waitForIdle()
+            onNodeWithText("Restored 13 items").assertExists()
+            assertTrue(h.repo.data.value.items.none { it.name == "Old Thing" })
+            val restoredPhoto = h.repo.data.value.items.first().photos.single()
+            assertTrue(restoredPhoto.startsWith("${platform.dataDir}/photos/"))
+            assertContentEquals(byteArrayOf(7, 7, 7), Files.readBytes(restoredPhoto))
+            assertFalse(Files.exists(picked), "picked copy is cleaned up")
+            onNodeWithTag("nav-Home").assertIsSelected()
+        }
+    }
+
+    @Test
+    fun cancellingRestoreKeepsData() {
+        val platform = FakePlatform()
+        writeBackupFile(platform, Backup.create(sampleData(), 1L) { null })
+        uiTest(data = InventoryData(items = listOf(Item(id = "old", name = "Old Thing"))), platform = platform) { h ->
+            tapRestore()
+            waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Restore this backup?").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithText("Cancel").performClick()
+            waitForIdle()
+            onNodeWithText("Restore this backup?").assertDoesNotExist()
+            assertEquals(listOf("Old Thing"), h.repo.data.value.items.map { it.name })
+        }
+    }
+
+    @Test
+    fun restoringAFileThatIsNotABackupShowsAnError() {
+        val platform = FakePlatform()
+        writeBackupFile(platform, """{"hello":"world"}""")
+        uiTest(platform = platform) { h ->
+            val before = h.repo.data.value
+            tapRestore()
+            waitUntil(timeoutMillis = 5_000) { onAllNodesWithText(Backup.NOT_A_BACKUP).fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithText("Restore this backup?").assertDoesNotExist()
+            assertEquals(before, h.repo.data.value)
+        }
+    }
+
+    @Test
+    fun cancellingTheFilePickerDoesNothing() = uiTest { h ->
+        val before = h.repo.data.value
+        tapRestore()
+        assertEquals(1, h.platform.backupPicks)
+        onNodeWithText("Restore this backup?").assertDoesNotExist()
+        assertEquals(before, h.repo.data.value)
     }
 
     @Test
