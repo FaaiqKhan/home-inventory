@@ -1,0 +1,4 @@
+// Set your Apple developer team to run on a device.
+TEAM_ID=
+BUNDLE_ID=com.localentertainmentgames.homeinventory
+APP_NAME=Home Inventory
