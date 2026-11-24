@@ -14,7 +14,7 @@ evacuation plan, and exports an insurance report as a PDF.
 | 1f | Evacuation mode (always dark): meeting point, call contacts, go-bag checklist, "I'm Evacuating" log | `ui/screens/EvacuationScreen.kt` |
 | 1g | Add item: barcode scan, torch, take photo, camera-permission explainer and denied states, form | `ui/screens/AddItemScreen.kt` |
 | 1h | Insurance report: totals, missing-photo warning, table preview, Export PDF, Share | `ui/screens/ReportScreen.kt` |
-| — | Edit item and delete; settings (layout, hide values, sample data, erase) | `EditItemScreen.kt`, `SettingsSheet.kt` |
+| — | Edit item and delete; settings (layout, hide values, export and restore backup, sample data, erase) | `EditItemScreen.kt`, `SettingsSheet.kt` |
 
 ## Layout
 
@@ -43,6 +43,7 @@ iosApp/   Xcode project (SwiftUI host for the Compose UI)
   | Photo capture | `TakePicture` + FileProvider | `UIImagePickerController` (photo library on the simulator) |
   | Camera permission | Supported | Supported |
   | Save | `CreateDocument` | Files export |
+  | Open a backup | `OpenDocument` | `UIDocumentPickerViewController` (JSON) |
   | Share | Share sheet | Share sheet |
   | App Settings | Opens the app's settings page | Opens the app's settings page |
   | Phone dialer | Supported | Supported |
@@ -61,11 +62,21 @@ iosApp/   Xcode project (SwiftUI host for the Compose UI)
 ./gradlew :shared:jvmTest                 # logic + Compose UI tests on the JVM (fast)
 ./gradlew :shared:iosSimulatorArm64Test   # the same tests on the iOS simulator
 ./gradlew :shared:testAndroidHostTest     # logic tests on the Android host
+./gradlew :app:assembleDebug :app:lintDebug
 ```
 
 The tests are in `shared/src/commonTest`:
 
 - Unit tests cover formatting, filters, expiry, the dashboard, the report, the repository and its
-  persistence, the item draft and the add flow, navigation, and the PDF writer.
+  persistence, the item draft and the add flow, navigation, the PDF writer, and the backup format and
+  restore (`BackupTest`).
 - UI tests (`AppUiTest`) drive the real `App()` through every screen and flow, using a fake platform for the
-  camera, permissions and share/save sheets.
+  camera, permissions, file picker and share/save sheets.
+- Screenshot tests (`shared/src/jvmTest`) render the main screens at phone size into
+  `shared/build/screenshots`.
+
+UI tests need Compose's test runtime, so they run on the JVM and the iOS simulator but not in the Android
+host tests. There are no instrumented Android tests yet.
+
+See [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) for what was built, how it differs from the design,
+and what is still open.
